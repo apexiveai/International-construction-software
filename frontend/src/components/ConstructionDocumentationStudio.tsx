@@ -17,7 +17,12 @@ import {
 import { loadBIMProject } from "@/lib/bim-core";
 import type { BIMProject } from "@/lib/bim-core";
 
-type DrawingKind = "Floor Plan" | "Elevation" | "Section" | "3D Coordination";
+type DrawingKind =
+  | "Floor Plan"
+  | "Elevation"
+  | "Section"
+  | "Detail"
+  | "3D Coordination";
 type DrawingView = {
   id: string;
   name: string;
@@ -32,7 +37,12 @@ type DrawingSheet = {
   title: string;
   viewIds: string[];
   revision: string;
-  status: "Draft" | "For Review" | "Issued";
+  status: "Draft" | "For Review" | "Approved" | "Issued" | "As-Built";
+  template?: "A1 Landscape" | "A3 Landscape" | "A1 Portrait";
+  discipline?: "Architecture" | "Structure" | "MEP" | "Coordination";
+  approvedBy?: string;
+  approvalDate?: string;
+  revisionCloudIds?: string[];
 };
 type Annotation = {
   id: string;
@@ -73,6 +83,14 @@ export default function ConstructionDocumentationStudio() {
     useState<Annotation["kind"]>("Note");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Documentation workspace ready");
+  const [sheetTemplate, setSheetTemplate] =
+    useState<NonNullable<DrawingSheet["template"]>>("A1 Landscape");
+  const [sheetDiscipline, setSheetDiscipline] =
+    useState<NonNullable<DrawingSheet["discipline"]>>("Architecture");
+  const [numberPrefix, setNumberPrefix] = useState("A");
+  const [approvedBy, setApprovedBy] = useState("");
+  const [activeDocumentTab, setActiveDocumentTab] =
+    useState<"Sheets" | "Views" | "Index" | "Document Control">("Sheets");
 
   useEffect(() => {
     setDocDate(new Date().toLocaleDateString());
@@ -168,11 +186,14 @@ export default function ConstructionDocumentationStudio() {
   const createSheet = () => {
     const next: DrawingSheet = {
       id: makeId("sheet"),
-      number: `A-${String(sheets.length + 1).padStart(3, "0")}`,
+      number: `${numberPrefix}-${String(sheets.length + 1).padStart(3, "0")}`,
       title: sheetTitle.trim() || "Untitled Sheet",
       viewIds: activeViewId ? [activeViewId] : [],
       revision: "A",
       status: "Draft",
+      template: sheetTemplate,
+      discipline: sheetDiscipline,
+      revisionCloudIds: [],
     };
     const updated = [...sheets, next];
     setSheets(updated);
@@ -227,11 +248,82 @@ export default function ConstructionDocumentationStudio() {
   const updateSheetStatus = (statusValue: DrawingSheet["status"]) => {
     if (!activeSheet) return;
     const updated = sheets.map((sheet) =>
-      sheet.id === activeSheet.id ? { ...sheet, status: statusValue } : sheet
+      sheet.id === activeSheet.id
+        ? {
+            ...sheet,
+            status: statusValue,
+            approvedBy: statusValue === "Approved" ? approvedBy.trim() || "Pending approval" : sheet.approvedBy,
+            approvalDate: statusValue === "Approved" ? new Date().toISOString().slice(0, 10) : sheet.approvalDate,
+          }
+        : sheet
     );
     setSheets(updated);
     persist(views, updated);
     setStatus(`${activeSheet.number} status: ${statusValue}`);
+  };
+
+  const advanceRevision = () => {
+    if (!activeSheet) {
+      setStatus("Select a drawing sheet before revising");
+      return;
+    }
+    const revised = sheets.map((sheet) => {
+      if (sheet.id !== activeSheet.id) return sheet;
+      const value = sheet.revision.trim().toUpperCase();
+      const nextRevision =
+        /^[A-Z]$/.test(value) && value !== "Z"
+          ? String.fromCharCode(value.charCodeAt(0) + 1)
+          : value === "Z"
+            ? "AA"
+            : "A";
+      return { ...sheet, revision: nextRevision, status: "Draft" as const };
+    });
+    setSheets(revised);
+    persist(views, revised);
+    setStatus(`${activeSheet.number} advanced to the next revision`);
+  };
+
+  const addRevisionCloud = () => {
+    if (!activeSheet) {
+      setStatus("Select a drawing sheet first");
+      return;
+    }
+    const updated = sheets.map((sheet) =>
+      sheet.id === activeSheet.id
+        ? {
+            ...sheet,
+            revisionCloudIds: [
+              ...(sheet.revisionCloudIds ?? []),
+              makeId("cloud"),
+            ],
+          }
+        : sheet
+    );
+    setSheets(updated);
+    persist(views, updated);
+    setStatus(`Revision cloud added to ${activeSheet.number}`);
+  };
+
+  const markAsBuilt = () => {
+    if (!activeSheet) {
+      setStatus("Select a drawing sheet before creating an as-built record");
+      return;
+    }
+    updateSheetStatus("As-Built");
+  };
+
+  const batchPublish = () => {
+    if (!sheets.length) {
+      setStatus("No drawing sheets available for batch publishing");
+      return;
+    }
+    const updated = sheets.map((sheet) => ({
+      ...sheet,
+      status: sheet.status === "Approved" ? ("Issued" as const) : sheet.status,
+    }));
+    setSheets(updated);
+    persist(views, updated);
+    setStatus(`Batch publish prepared for ${updated.length} sheets`);
   };
 
   const exportRegister = () => {
@@ -327,6 +419,25 @@ export default function ConstructionDocumentationStudio() {
         </div>
       </header>
 
+      <nav className="no-print border-b border-white/10 bg-[#0a121d] px-5 md:px-8">
+        <div className="mx-auto flex max-w-[1600px] gap-2 py-3">
+          {(["Sheets", "Views", "Index", "Document Control"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveDocumentTab(tab)}
+              className={`rounded-lg px-3 py-2 text-xs ${
+                activeDocumentTab === tab
+                  ? "bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/25"
+                  : "text-slate-400 hover:bg-white/5"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       <div className="mx-auto max-w-[1600px] space-y-5 p-5 md:p-8">
         <section className="no-print grid gap-4 xl:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-[#101b29] p-5">
@@ -355,6 +466,7 @@ export default function ConstructionDocumentationStudio() {
                     "Floor Plan",
                     "Elevation",
                     "Section",
+                    "Detail",
                     "3D Coordination",
                   ].map((v) => (
                     <option key={v}>{v}</option>
@@ -415,6 +527,47 @@ export default function ConstructionDocumentationStudio() {
               onChange={(e) => setSheetTitle(e.target.value)}
               className="w-full rounded-lg border border-white/10 bg-[#0a121d] px-3 py-2 text-sm"
             />
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <select
+                value={numberPrefix}
+                onChange={(e) => setNumberPrefix(e.target.value)}
+                className="rounded-lg border border-white/10 bg-[#0a121d] px-2 py-2 text-xs"
+                aria-label="Drawing number prefix"
+              >
+                {["A", "S", "M", "E", "P", "F", "C"].map((prefix) => (
+                  <option key={prefix}>{prefix}</option>
+                ))}
+              </select>
+              <select
+                value={sheetTemplate}
+                onChange={(e) =>
+                  setSheetTemplate(
+                    e.target.value as NonNullable<DrawingSheet["template"]>
+                  )
+                }
+                className="rounded-lg border border-white/10 bg-[#0a121d] px-2 py-2 text-xs"
+                aria-label="Sheet template"
+              >
+                <option>A1 Landscape</option>
+                <option>A3 Landscape</option>
+                <option>A1 Portrait</option>
+              </select>
+              <select
+                value={sheetDiscipline}
+                onChange={(e) =>
+                  setSheetDiscipline(
+                    e.target.value as NonNullable<DrawingSheet["discipline"]>
+                  )
+                }
+                className="rounded-lg border border-white/10 bg-[#0a121d] px-2 py-2 text-xs"
+                aria-label="Sheet discipline"
+              >
+                <option>Architecture</option>
+                <option>Structure</option>
+                <option>MEP</option>
+                <option>Coordination</option>
+              </select>
+            </div>
             <button
               type="button"
               onClick={createSheet}
@@ -461,6 +614,55 @@ export default function ConstructionDocumentationStudio() {
                 className="flex-1 rounded-lg border border-emerald-400/30 px-2 py-2 text-xs text-emerald-300 disabled:opacity-40"
               >
                 Issue
+              </button>
+            </div>
+            <input
+              value={approvedBy}
+              onChange={(e) => setApprovedBy(e.target.value)}
+              placeholder="Approver name"
+              className="mt-3 w-full rounded-lg border border-white/10 bg-[#0a121d] px-3 py-2 text-xs"
+              aria-label="Approved by"
+            />
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => updateSheetStatus("Approved")}
+                disabled={!activeSheet}
+                className="rounded-lg border border-cyan-400/30 px-2 py-2 text-xs text-cyan-200 disabled:opacity-40"
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={markAsBuilt}
+                disabled={!activeSheet}
+                className="rounded-lg border border-amber-400/30 px-2 py-2 text-xs text-amber-200 disabled:opacity-40"
+              >
+                As-Built
+              </button>
+              <button
+                type="button"
+                onClick={advanceRevision}
+                disabled={!activeSheet}
+                className="rounded-lg border border-white/10 px-2 py-2 text-xs disabled:opacity-40"
+              >
+                Next Revision
+              </button>
+              <button
+                type="button"
+                onClick={addRevisionCloud}
+                disabled={!activeSheet}
+                className="rounded-lg border border-white/10 px-2 py-2 text-xs disabled:opacity-40"
+              >
+                Revision Cloud
+              </button>
+              <button
+                type="button"
+                onClick={batchPublish}
+                disabled={!sheets.length}
+                className="col-span-2 rounded-lg bg-cyan-400 px-2 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
+              >
+                Batch Publish Drawing Set
               </button>
             </div>
           </div>
@@ -608,6 +810,13 @@ export default function ConstructionDocumentationStudio() {
                       ? `${activeView.kind} · ${activeView.scale}`
                       : "Select a view or sheet"}
                   </p>
+                  {activeSheet && (
+                    <p className="mt-1 text-[9px] text-slate-500">
+                      {activeSheet.template ?? "A1 Landscape"} · {activeSheet.discipline ?? "Coordination"}
+                      {activeSheet.approvedBy ? ` · Approved by ${activeSheet.approvedBy}` : ""}
+                      {activeSheet.revisionCloudIds?.length ? ` · ${activeSheet.revisionCloudIds.length} revision clouds` : ""}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right text-[10px] text-slate-500">
                   PROJECT DOCUMENT
@@ -757,6 +966,74 @@ export default function ConstructionDocumentationStudio() {
             </div>
           </div>
         </section>
+
+        {(activeDocumentTab === "Index" || activeDocumentTab === "Document Control") && (
+          <section className="no-print rounded-2xl border border-white/10 bg-[#101b29] p-5">
+            {activeDocumentTab === "Index" ? (
+              <>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="font-semibold">Drawing Index & Numbering</h2>
+                  <span className="text-xs text-slate-500">{sheets.length} sheets</span>
+                </div>
+                <div className="overflow-auto rounded-lg border border-white/10">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#142235] text-slate-400">
+                      <tr>
+                        <th className="p-3">Drawing No.</th>
+                        <th className="p-3">Title</th>
+                        <th className="p-3">Discipline</th>
+                        <th className="p-3">Revision</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3">Template</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sheets.map((sheet) => (
+                        <tr key={sheet.id} className="border-t border-white/5">
+                          <td className="p-3 font-medium">{sheet.number}</td>
+                          <td className="p-3">{sheet.title}</td>
+                          <td className="p-3">{sheet.discipline ?? "Coordination"}</td>
+                          <td className="p-3">{sheet.revision}</td>
+                          <td className="p-3">{sheet.status}</td>
+                          <td className="p-3">{sheet.template ?? "A1 Landscape"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {!sheets.length && (
+                    <p className="p-6 text-center text-slate-500">No drawings in the current index.</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="mb-4 font-semibold">Document Control & Publication</h2>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    ["Construction Drawing Sets", `${sheets.length} registered sheets`],
+                    ["Batch Publishing", "Approved sheets prepared for issue"],
+                    ["PDF Publishing", "Browser print / PDF output"],
+                    ["Revision Tracking", `${views.length} views · ${annotations.length} annotations`],
+                    ["Drawing Approval", `${sheets.filter((sheet) => sheet.status === "Approved").length} approved`],
+                    ["As-Built Documentation", `${sheets.filter((sheet) => sheet.status === "As-Built").length} records`],
+                    ["Title Blocks", "Template metadata ready"],
+                    ["Document Index", "Numbered drawing register"],
+                  ].map(([title, detail]) => (
+                    <button
+                      key={title}
+                      type="button"
+                      onClick={() => setStatus(`${title}: document control record opened`)}
+                      className="rounded-lg border border-white/[0.07] bg-[#0a121d] p-3 text-left"
+                    >
+                      <p className="text-xs font-medium text-slate-200">{title}</p>
+                      <p className="mt-2 text-[10px] text-slate-500">{detail}</p>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        )}
 
         <section className="no-print rounded-2xl border border-white/10 bg-[#101b29] p-5">
           <div className="mb-3 flex items-center gap-2">

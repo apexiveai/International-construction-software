@@ -1,0 +1,128 @@
+
+erDiagram
+    USER ||--o{ MEMBERSHIP : joins
+    ORGANIZATION ||--o{ MEMBERSHIP : has
+    ORGANIZATION ||--o{ WORKSPACE : owns
+    ORGANIZATION ||--o{ PROJECT : owns
+
+    WORKSPACE ||--o{ PROJECT : contains
+    WORKSPACE ||--o{ WORKSPACE_MEMBER : includes
+    USER ||--o{ WORKSPACE_MEMBER : participates
+
+    PROJECT ||--o{ PROJECT_MEMBER : includes
+    USER ||--o{ PROJECT_MEMBER : participates
+
+    PROJECT ||--o{ BIM_MODEL : contains
+    BIM_MODEL ||--o{ BIM_MODEL_VERSION : versions
+    BIM_MODEL ||--o{ BIM_LEVEL : contains
+    BIM_MODEL ||--o{ BIM_GRID : contains
+    BIM_MODEL ||--o{ BIM_ELEMENT : contains
+
+    BIM_LEVEL ||--o{ BIM_ELEMENT : hosts
+    BIM_ELEMENT_TYPE ||--o{ BIM_ELEMENT : instantiates
+    BIM_ELEMENT ||--o{ BIM_ELEMENT_PARAMETER : has
+    BIM_PARAMETER_DEFINITION ||--o{ BIM_ELEMENT_PARAMETER : defines
+
+    BIM_ELEMENT ||--o{ BIM_ELEMENT_REVISION : records
+    BIM_ELEMENT ||--o{ BIM_ELEMENT_MATERIAL : uses
+    BIM_MATERIAL ||--o{ BIM_ELEMENT_MATERIAL : assigned
+
+    BIM_ELEMENT ||--o{ BIM_RELATIONSHIP : source
+    BIM_ELEMENT ||--o{ BIM_RELATIONSHIP : target
+
+    PROJECT ||--o{ STORED_FILE : contains
+    STORED_FILE ||--o{ FILE_VERSION : versions
+    PROJECT ||--o{ DOCUMENT : contains
+    DOCUMENT ||--o{ DOCUMENT_REVISION : revisions
+
+    PROJECT ||--o{ QUANTITY_TAKEOFF : measures
+    QUANTITY_TAKEOFF ||--o{ QUANTITY_ITEM : contains
+    PROJECT ||--o{ ESTIMATE : estimates
+    ESTIMATE ||--o{ ESTIMATE_LINE : contains
+
+    PROJECT ||--o{ PURCHASE_ORDER : orders
+    PURCHASE_ORDER ||--o{ PURCHASE_ORDER_LINE : contains
+
+    PROJECT ||--o{ PROJECT_BUDGET : budgets
+    PROJECT_BUDGET ||--o{ BUDGET_LINE : contains
+    PROJECT ||--o{ PAYMENT : records
+
+    ORGANIZATION {
+        uuid id PK
+        string name
+        string slug UK
+    }
+
+    USER {
+        uuid id PK
+        string email UK
+        string full_name
+    }
+
+    MEMBERSHIP {
+        uuid id PK
+        uuid organization_id FK
+        uuid user_id FK
+        uuid role_id FK
+        string status
+    }
+
+    WORKSPACE {
+        uuid id PK
+        uuid organization_id FK
+        string name
+    }
+
+    PROJECT {
+        uuid id PK
+        uuid organization_id FK
+        uuid workspace_id FK
+        string project_code
+        string name
+        string status
+    }
+
+    BIM_MODEL {
+        uuid id PK
+        uuid project_id FK
+        string name
+        string discipline
+        string status
+    }
+
+    BIM_MODEL_VERSION {
+        uuid id PK
+        uuid model_id FK
+        int version_number
+        string checksum
+    }
+
+    BIM_ELEMENT {
+        uuid id PK
+        uuid model_id FK
+        uuid level_id FK
+        uuid element_type_id FK
+        string ifc_guid
+        string category
+    }
+
+    BIM_ELEMENT_PARAMETER {
+        uuid id PK
+        uuid element_id FK
+        uuid parameter_definition_id FK
+    }
+
+    STORED_FILE {
+        uuid id PK
+        uuid organization_id FK
+        uuid project_id FK
+        string storage_key
+        string checksum
+    }
+
+    DOCUMENT {
+        uuid id PK
+        uuid project_id FK
+        string document_number
+        string title
+    }

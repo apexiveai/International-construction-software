@@ -3,10 +3,11 @@
 import { useState } from "react";
 import {
   Ruler, Building2, Cuboid, Layers3, Box, Cpu,
-  FolderOpen, Compass, Settings2, Search, Cloud,
+  Settings2, Search, Cloud,
   ChevronDown, FilePlus2, PanelRight, Grid3X3,
-  Workflow, FileText, Calculator, Wallet, ClipboardList,
+  FileText, Calculator, Wallet, ClipboardList,
   HardHat, Package, Handshake,
+  Network, Bot,
 } from "lucide-react";
 
 import CadEditor from "@/components/CadEditor";
@@ -22,6 +23,8 @@ import ProjectManagementStudio from "@/components/ProjectManagementStudio";
 import ConstructionOperationsStudio from "@/components/ConstructionOperationsStudio";
 import ProcurementInventoryStudio from "@/components/ProcurementInventoryStudio";
 import SubcontractorContractStudio from "@/components/SubcontractorContractStudio";
+import EngineeringExtensionsStudio from "@/components/EngineeringExtensionsStudio";
+import DigitalTwinAIStudio from "@/components/DigitalTwinAIStudio";
 
 const modules = [
   { id: "cad", name: "CAD Drafting", icon: Ruler, engine: "APEXIVEAI 2D CAD ENGINE" },
@@ -30,6 +33,11 @@ const modules = [
   { id: "architecture", name: "Architecture", icon: Layers3, engine: "ARCHITECTURE DESIGN STUDIO" },
   { id: "structure", name: "Structure", icon: Box, engine: "STRUCTURAL ENGINEERING STUDIO" },
   { id: "mep", name: "MEP Engineering", icon: Cpu, engine: "MEP ENGINEERING STUDIO" },
+  { id: "civil", name: "Civil & Infrastructure", icon: Grid3X3, engine: "CIVIL INFRASTRUCTURE STUDIO" },
+  { id: "analysis", name: "Analysis & Simulation", icon: Cpu, engine: "ENGINEERING ANALYSIS ENGINE" },
+  { id: "visualization", name: "Visualization", icon: Cuboid, engine: "REAL-TIME VISUALIZATION STUDIO" },
+  { id: "digital-twin", name: "Digital Twin & Assets", icon: Network, engine: "DIGITAL TWIN & ASSET LIFECYCLE" },
+  { id: "ai-assistant", name: "AI Engineering Assistant", icon: Bot, engine: "AI ENGINEERING ASSISTANT" },
   { id: "documentation", name: "Construction Docs", icon: FileText, engine: "CONSTRUCTION DOCUMENTATION" },
   { id: "quantity-cost", name: "Quantity & Cost", icon: Calculator, engine: "BIM QUANTITY & COST ESTIMATION" },
   { id: "project-management", name: "Project Management", icon: ClipboardList, engine: "ENTERPRISE PROJECT MANAGEMENT" },
@@ -49,6 +57,11 @@ function ActiveModuleView({ moduleId }: { moduleId: ModuleId }) {
     case "architecture": return <ArchitectureStudio />;
     case "structure": return <StructureStudio />;
     case "mep": return <MEPStudio />;
+    case "civil": return <EngineeringExtensionsStudio initial="civil" />;
+    case "analysis": return <EngineeringExtensionsStudio initial="analysis" />;
+    case "visualization": return <EngineeringExtensionsStudio initial="visualization" />;
+    case "digital-twin": return <DigitalTwinAIStudio initial="twin" />;
+    case "ai-assistant": return <DigitalTwinAIStudio initial="ai" />;
     case "documentation": return <ConstructionDocumentationStudio />;
     case "quantity-cost": return <QuantityCostStudio />;
     case "project-management": return <ProjectManagementStudio />;
@@ -62,8 +75,20 @@ function ActiveModuleView({ moduleId }: { moduleId: ModuleId }) {
 
 export default function Home() {
   const [activeModule, setActiveModule] = useState<ModuleId>("cad");
+  const [suiteMenuOpen, setSuiteMenuOpen] = useState(false);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const active = modules.find((module) => module.id === activeModule) ?? modules[0];
   const ActiveIcon = active.icon;
+
+  const contextualTabs: Record<string, string[]> = {
+    cad: ["Drafting", "Modify", "Annotation", "Layers", "View", "Output"],
+    bim: ["Model", "Views", "Families", "Coordination", "Schedule"],
+    "3d": ["Scene", "Mesh", "Materials", "Lights", "Camera", "Render"],
+    architecture: ["Design", "Walls", "Openings", "Rooms", "Documentation"],
+    structure: ["Members", "Loads", "Analysis", "Details", "Reports"],
+    mep: ["Systems", "Routes", "Equipment", "Loads", "Coordination"],
+  };
+  const ribbonTabs = contextualTabs[activeModule] ?? ["Home", "Create", "Edit", "View", "Publish"];
 
   return (
     <main className="application">
@@ -76,14 +101,71 @@ export default function Home() {
           </div>
         </div>
 
+        <div className="suite-switcher">
+          <button
+            className={`suite-switcher-button ${suiteMenuOpen ? "open" : ""}`}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={suiteMenuOpen}
+            onClick={() => setSuiteMenuOpen((open) => !open)}
+          >
+            <ActiveIcon size={16} />
+            <span>ENGINEERING SUITE</span>
+            <ChevronDown size={14} />
+          </button>
+
+          {suiteMenuOpen && (
+            <div className="suite-menu" role="menu">
+              {modules.map((module) => {
+                const Icon = module.icon;
+                return (
+                  <button
+                    key={module.id}
+                    type="button"
+                    role="menuitem"
+                    className={`suite-menu-item ${activeModule === module.id ? "selected" : ""}`}
+                    onClick={() => {
+                      setActiveModule(module.id);
+                      setSuiteMenuOpen(false);
+                    }}
+                  >
+                    <Icon size={16} />
+                    <span>{module.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="top-divider" />
 
-        <div className="project-context">
-          <Building2 size={17} />
-          <span>Workspace</span>
-          <span>/</span>
-          <strong>Untitled Project</strong>
-          <ChevronDown size={14} />
+        <div className="workspace-switcher">
+          <button
+            className={`project-context ${workspaceMenuOpen ? "open" : ""}`}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={workspaceMenuOpen}
+            onClick={() => setWorkspaceMenuOpen((open) => !open)}
+          >
+            <Building2 size={17} />
+            <span>Workspace</span>
+            <span>/</span>
+            <strong>Untitled Project</strong>
+            <ChevronDown size={14} />
+          </button>
+          {workspaceMenuOpen && (
+            <div className="workspace-menu" role="menu">
+              <button type="button" role="menuitem" className="workspace-menu-item selected">
+                <Building2 size={15} />
+                <span>Untitled Project</span>
+              </button>
+              <button type="button" role="menuitem" className="workspace-menu-item">
+                <FilePlus2 size={15} />
+                <span>New Project</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="topbar-spacer" />
@@ -98,57 +180,7 @@ export default function Home() {
         <button className="profile-button" type="button">BH</button>
       </header>
 
-      <nav className="module-nav">
-        <div className="nav-label">ENGINEERING SUITE</div>
-
-        {modules.map((module) => {
-          const Icon = module.icon;
-          return (
-            <button
-              key={module.id}
-              type="button"
-              className={`module-item ${activeModule === module.id ? "selected" : ""}`}
-              onClick={() => setActiveModule(module.id)}
-              aria-current={activeModule === module.id ? "page" : undefined}
-            >
-              <Icon size={17} />
-              <span>{module.name}</span>
-            </button>
-          );
-        })}
-
-        <div className="nav-divider" />
-
-        <button className="module-item" type="button" onClick={() => setActiveModule("documentation")}>
-          <FolderOpen size={17} />
-          <span>Project Files</span>
-        </button>
-        <button className="module-item" type="button" onClick={() => setActiveModule("procurement")}>
-          <Compass size={17} />
-          <span>Marketplace / Suppliers</span>
-        </button>
-      </nav>
-
       <section className="workspace">
-        <div className="workspace-header">
-          <div>
-            <div className="breadcrumb">ENGINEERING <span>/</span> {active.name.toUpperCase()}</div>
-            <h1>{active.name} Workspace</h1>
-            <p>Professional engineering design, modeling and construction management environment.</p>
-          </div>
-
-          <div className="header-actions">
-            <button className="secondary-action" type="button">
-              <FilePlus2 size={16} />
-              New Project
-            </button>
-            <button className="primary-action" type="button">
-              <Cloud size={16} />
-              Publish
-            </button>
-          </div>
-        </div>
-
         <div className="document-tabs">
           <div className="document-tab active">
             <ActiveIcon size={15} />
@@ -162,22 +194,27 @@ export default function Home() {
 
         <div className="editor">
           <div className="editor-toolbar">
-            <div className="toolbar-section">
-              <span className="engine-indicator">
-                <span className="live-dot" />
-                {active.engine}
-              </span>
+            <div className="context-ribbon-tabs" role="tablist" aria-label="Contextual tool ribbon">
+              {ribbonTabs.map((tab, index) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={index === 0}
+                  className={`context-ribbon-tab ${index === 0 ? "active" : ""}`}
+                >
+                  {tab}
+                </button>
+              ))}
             </div>
-            <div className="toolbar-section">
-              <button className="editor-tool" type="button">
-                <Grid3X3 size={16} />
-                Workspace
-              </button>
-              <button className="editor-tool" type="button">
-                <PanelRight size={16} />
-                Properties
-              </button>
-            </div>
+            <button className="editor-tool" type="button">
+              <Grid3X3 size={16} />
+              Workspace
+            </button>
+            <button className="editor-tool" type="button">
+              <PanelRight size={16} />
+              Properties
+            </button>
           </div>
 
           <ActiveModuleView moduleId={activeModule} />

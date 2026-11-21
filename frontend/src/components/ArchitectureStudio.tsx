@@ -83,6 +83,9 @@ export default function ArchitectureStudio() {
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [future, setFuture] = useState<HistoryState[]>([]);
   const [tool, setTool] = useState<"select" | "wall" | "slab">("select");
+  const [designTab, setDesignTab] = useState<
+    "Model" | "Planning" | "Documentation" | "Review"
+  >("Model");
   const selected = elements.find((element) => element.id === selectedId) ?? null;
   const activeLevel = levels.find((level) => level.id === activeLevelId) ?? levels[0];
 
@@ -227,6 +230,19 @@ export default function ArchitectureStudio() {
         <span className="a07-label">LEVEL</span>
         <select aria-label="Active level" value={activeLevelId} onChange={(event) => setActiveLevelId(event.target.value)} style={{height:32,maxWidth:165,background:"#09121d",color:"#c6d7e9",border:"1px solid #293d53",borderRadius:6,padding:"0 7px",fontSize:11}}>{levels.map((level) => <option key={level.id} value={level.id}>{level.name}</option>)}</select>
         <button className="a07-btn" onClick={addLevel} title="Add level"><Plus size={14}/></button>
+        <span className="a07-sep"/>
+        {(["Model", "Planning", "Documentation", "Review"] as const).map((tab) => (
+          <button
+            key={tab}
+            className={`a07-btn ${designTab === tab ? "active" : ""}`}
+            onClick={() => {
+              setDesignTab(tab);
+              setStatus(`${tab} workspace opened`);
+            }}
+          >
+            {tab}
+          </button>
+        ))}
       </nav>
       <section className="a07-stage">
         <div className="a07-view" ref={hostRef}>
@@ -236,6 +252,24 @@ export default function ArchitectureStudio() {
         </div>
         {showInspector && <aside className="a07-inspector">
           <div className="a07-head"><b>MODEL EXPLORER</b><span className="a07-chip">{elements.length} ELEMENTS</span></div>
+          <div className="a07-section">
+            <div className="a07-section-title">{designTab.toUpperCase()} WORKSPACE</div>
+            {designTab === "Planning" && ["Site Planning", "Building Layout", "Floor Plan", "Elevation", "Section Drawing", "Roof Design", "Facade Design", "Interior Design", "Room Planning", "Space Planning"].map((tool) => (
+              <button key={tool} className="a07-btn" style={{ width: "100%", justifyContent: "flex-start", margin: "3px 0" }} onClick={() => setStatus(`${tool} tool selected`)}>{tool}</button>
+            ))}
+            {designTab === "Documentation" && ["Door & Window Schedules", "Room Finish Schedules", "Area Calculation", "Architectural Documentation"].map((tool) => (
+              <button key={tool} className="a07-btn" style={{ width: "100%", justifyContent: "flex-start", margin: "3px 0" }} onClick={() => setStatus(`${tool} opened`)}>{tool}</button>
+            ))}
+            {designTab === "Review" && ["Building Code Rules", "Accessibility Checks", "Design Alternatives", "Design Review"].map((tool) => (
+              <button key={tool} className="a07-btn" style={{ width: "100%", justifyContent: "flex-start", margin: "3px 0" }} onClick={() => setStatus(`${tool}: validation ready`)}>{tool}</button>
+            ))}
+            {designTab === "Model" && (
+              <>
+                <div className="a07-field"><span>Architectural design workspace</span><strong>Active</strong></div>
+                <div className="a07-field"><span>Parametric families</span><strong>{elements.filter((item) => item.kind !== "room").length}</strong></div>
+              </>
+            )}
+          </div>
           <div className="a07-section"><div className="a07-section-title">LEVELS</div>{levels.map((level) => <div key={level.id} className={`a07-row ${activeLevelId === level.id ? "selected" : ""}`} onClick={() => setActiveLevelId(level.id)}><Layers3 size={13}/><span>{level.name}</span><span className="a07-chip">{level.elevation.toFixed(2)}m</span></div>)}</div>
           <div className="a07-section"><div className="a07-section-title">ARCHITECTURAL ELEMENTS</div>{elements.filter((element) => element.levelId === activeLevelId).map((element) => <div key={element.id} className={`a07-row ${selectedId === element.id ? "selected" : ""}`} onClick={() => setSelectedId(element.id)}><span style={{width:8,height:8,borderRadius:2,background:element.color,flex:"none"}}/><span>{element.name}</span><button className="a07-btn" style={{width:25,minWidth:25,height:24,padding:0}} title={element.visible ? "Hide" : "Show"} onClick={(event) => { event.stopPropagation(); commit(); setElements((current) => current.map((item) => item.id === element.id ? {...item,visible:!item.visible} : item)); }}>{element.visible ? <Eye size={12}/> : <EyeOff size={12}/>}</button></div>)}</div>
           <div className="a07-section"><div className="a07-section-title">ELEMENT PROPERTIES</div>{selected ? <>

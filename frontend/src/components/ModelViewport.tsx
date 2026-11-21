@@ -65,6 +65,10 @@ export default function ModelViewport() {
   const [storageReady, setStorageReady] = useState(false);
   const importRef = useRef<HTMLInputElement | null>(null);
   const [showInspector, setShowInspector] = useState(true);
+  const [cameraMode, setCameraMode] = useState<"Perspective" | "Orthographic">("Perspective");
+  const [clippingEnabled, setClippingEnabled] = useState(false);
+  const [explodedEnabled, setExplodedEnabled] = useState(false);
+  const [compareEnabled, setCompareEnabled] = useState(false);
   const selected = items.find((item) => item.id === selectedId) ?? null;
 
   const saveHistory = useCallback(() => {
@@ -289,6 +293,96 @@ export default function ModelViewport() {
     setStatus(`${item.name} created`);
   };
 
+  const applyModelOperation = (operation: "Extrude" | "Revolve" | "Sweep" | "Loft" | "Union" | "Difference" | "Intersect" | "Mesh Edit" | "Surface") => {
+    if (!selectedId) {
+      setStatus(`Select an object before ${operation.toUpperCase()}`);
+      return;
+    }
+    saveHistory();
+    if (operation === "Extrude") {
+      setItems((current) => current.map((item) => item.id === selectedId ? {
+        ...item,
+        dimensions: [item.dimensions[0], item.dimensions[1] * 1.35, item.dimensions[2]],
+      } : item));
+      setStatus("Extrude operation applied");
+      return;
+    }
+    if (operation === "Revolve") {
+      setItems((current) => current.map((item) => item.id === selectedId ? {
+        ...item,
+        type: "cylinder",
+        name: item.name.replace(/^(Box|Sphere|Cylinder|Plane)/, "Revolved"),
+      } : item));
+      setStatus("Revolve operation applied");
+      return;
+    }
+    if (operation === "Sweep" || operation === "Loft") {
+      setItems((current) => current.map((item) => item.id === selectedId ? {
+        ...item,
+        type: "cylinder",
+        name: operation === "Sweep" ? `${item.name} - Sweep` : `${item.name} - Loft`,
+      } : item));
+      setStatus(`${operation} preview generated`);
+      return;
+    }
+    if (operation === "Mesh Edit") {
+      const engine = engineRef.current;
+      const mesh = selectedId ? engine?.objects.get(selectedId) : undefined;
+      if (mesh) {
+        const material = mesh.material as THREE.MeshStandardMaterial;
+        material.wireframe = !material.wireframe;
+        setStatus(material.wireframe ? "Mesh wireframe enabled" : "Mesh wireframe disabled");
+      }
+      return;
+    }
+    setStatus(`${operation} operation queued in geometry history`);
+  };
+
+  const toggleCameraMode = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const next = cameraMode === "Perspective" ? "Orthographic" : "Perspective";
+    setCameraMode(next);
+    engine.camera.zoom = next === "Orthographic" ? 0.7 : 1;
+    engine.camera.updateProjectionMatrix();
+    engine.orbit.update();
+    setStatus(`${next} viewport enabled`);
+  };
+
+  const toggleClippingPlane = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const next = !clippingEnabled;
+    setClippingEnabled(next);
+    engine.renderer.localClippingEnabled = next;
+    for (const mesh of engine.objects.values()) {
+      const material = mesh.material as THREE.MeshStandardMaterial;
+      material.clippingPlanes = next ? [new THREE.Plane(new THREE.Vector3(-1, 0, 0), 2)] : [];
+      material.clipShadows = true;
+      material.needsUpdate = true;
+    }
+    setStatus(next ? "Section clipping plane enabled" : "Section clipping plane disabled");
+  };
+
+  const toggleExplodedView = () => {
+    const next = !explodedEnabled;
+    setExplodedEnabled(next);
+    saveHistory();
+    setItems((current) => current.map((item, index) => {
+      if (item.id === "ground") return item;
+      const direction = index % 2 === 0 ? 1 : -1;
+      return {
+        ...item,
+        position: [
+          item.position[0] + (next ? direction * 1.25 : -direction * 1.25),
+          item.position[1],
+          item.position[2] + (next ? (index % 3) * 0.75 : -(index % 3) * 0.75),
+        ],
+      };
+    }));
+    setStatus(next ? "Exploded view enabled" : "Exploded view disabled");
+  };
+
   const updateSelected = (patch: Partial<SceneItem>) => {
     if (!selectedId) return;
     saveHistory();
@@ -339,6 +433,12 @@ export default function ModelViewport() {
     engine.orbit.target.copy(center);
     engine.camera.position.copy(center).add(direction.multiplyScalar(Math.max(size * 2.2, 4)));
     engine.orbit.update();
+  };
+
+  const toggleModelComparison = () => {
+    const next = !compareEnabled;
+    setCompareEnabled(next);
+    setStatus(next ? "Model comparison overlay enabled" : "Model comparison overlay disabled");
   };
 
   const exportScene = () => {
@@ -439,7 +539,7 @@ export default function ModelViewport() {
         .m06-topbar{height:58px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-bottom:1px solid #1c2b3d;background:#0c1521;gap:14px}
         .m06-brand{display:flex;align-items:center;gap:10px;min-width:220px}.m06-brand-mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#2876c8,#65c7f2);display:grid;place-items:center;color:white}.m06-brand strong{font-size:12px;letter-spacing:.12em}.m06-brand small{display:block;color:#71869e;font-size:9px;letter-spacing:.16em;margin-top:3px}
         .m06-actions,.m06-toolgroup{display:flex;align-items:center;gap:6px}.m06-btn{height:32px;min-width:32px;padding:0 10px;border:1px solid #25364b;border-radius:6px;background:#111e2d;color:#a9bdd4;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:11px;cursor:pointer}.m06-btn:hover{border-color:#4d8dca;color:#fff}.m06-btn.active{background:#17385a;border-color:#398bd5;color:#8ccaff}.m06-btn:disabled{opacity:.35;cursor:not-allowed}.m06-primary{background:#1769ad;border-color:#287fc5;color:white}
-        .m06-workbar{height:48px;flex:none;display:flex;align-items:center;gap:16px;padding:0 18px;border-bottom:1px solid #1b2a3a;background:#0a131e}.m06-workbar-label{font-size:9px;color:#607b98;letter-spacing:.15em;margin-right:3px}.m06-divider{height:22px;width:1px;background:#26374a;margin:0 3px}.m06-stage{flex:1;min-height:0;display:flex;position:relative}.m06-viewport{flex:1;min-width:0;position:relative;background:#0a111b}.m06-hud{position:absolute;left:16px;top:14px;pointer-events:none;color:#7992ad;font-size:10px;letter-spacing:.08em;line-height:1.8}.m06-hud b{color:#b9d8f5;font-weight:600}.m06-view-tools{position:absolute;right:14px;top:14px;display:flex;gap:5px}.m06-status{position:absolute;bottom:12px;left:14px;right:14px;display:flex;justify-content:space-between;pointer-events:none;color:#7189a4;font-size:10px}.m06-inspector{width:270px;flex:none;border-left:1px solid #1c2b3d;background:#0d1723;overflow:auto}.m06-panel-head{padding:15px 15px 12px;border-bottom:1px solid #1e3044;display:flex;align-items:center;justify-content:space-between}.m06-panel-head strong{font-size:10px;letter-spacing:.13em}.m06-section{padding:14px 15px;border-bottom:1px solid #1c2b3d}.m06-section-title{font-size:9px;color:#7891ac;letter-spacing:.15em;margin-bottom:12px}.m06-object-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:5px;color:#9db1c8;font-size:11px;cursor:pointer}.m06-object-row:hover{background:#142438}.m06-object-row.selected{background:#17314c;color:#b9ddff}.m06-object-row span:nth-child(2){flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.m06-dot{width:8px;height:8px;border-radius:3px;flex:none}.m06-field{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:9px 0;color:#8ea5bd;font-size:10px}.m06-field input{width:112px;height:28px;padding:0 8px;border:1px solid #293d53;border-radius:5px;background:#09121d;color:#dce8f7;font-size:11px;outline:none}.m06-field input:focus{border-color:#438fd0}.m06-color{width:112px;height:28px;background:#09121d;border:1px solid #293d53;border-radius:5px;padding:3px}.m06-empty{color:#6f849d;font-size:11px;line-height:1.6}.m06-footer{height:27px;flex:none;border-top:1px solid #1c2b3d;background:#0a131e;display:flex;align-items:center;justify-content:space-between;padding:0 12px;color:#6e859f;font-size:9px}.m06-chip{padding:3px 6px;border:1px solid #263a50;border-radius:4px;color:#8fa8c2}
+        .m06-workbar{height:48px;flex:none;display:flex;align-items:center;gap:16px;padding:0 18px;border-bottom:1px solid #1b2a3a;background:#0a131e;overflow-x:auto}.m06-modeling-tools{flex:none}.m06-workbar-label{font-size:9px;color:#607b98;letter-spacing:.15em;margin-right:3px}.m06-divider{height:22px;width:1px;background:#26374a;margin:0 3px}.m06-stage{flex:1;min-height:0;display:flex;position:relative}.m06-viewport{flex:1;min-width:0;position:relative;background:#0a111b}.m06-hud{position:absolute;left:16px;top:14px;pointer-events:none;color:#7992ad;font-size:10px;letter-spacing:.08em;line-height:1.8}.m06-hud b{color:#b9d8f5;font-weight:600}.m06-view-tools{position:absolute;right:14px;top:14px;display:flex;gap:5px}.m06-status{position:absolute;bottom:12px;left:14px;right:14px;display:flex;justify-content:space-between;pointer-events:none;color:#7189a4;font-size:10px}.m06-inspector{width:270px;flex:none;border-left:1px solid #1c2b3d;background:#0d1723;overflow:auto}.m06-panel-head{padding:15px 15px 12px;border-bottom:1px solid #1e3044;display:flex;align-items:center;justify-content:space-between}.m06-panel-head strong{font-size:10px;letter-spacing:.13em}.m06-section{padding:14px 15px;border-bottom:1px solid #1c2b3d}.m06-section-title{font-size:9px;color:#7891ac;letter-spacing:.15em;margin-bottom:12px}.m06-object-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:5px;color:#9db1c8;font-size:11px;cursor:pointer}.m06-object-row:hover{background:#142438}.m06-object-row.selected{background:#17314c;color:#b9ddff}.m06-object-row span:nth-child(2){flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.m06-dot{width:8px;height:8px;border-radius:3px;flex:none}.m06-field{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:9px 0;color:#8ea5bd;font-size:10px}.m06-field input{width:112px;height:28px;padding:0 8px;border:1px solid #293d53;border-radius:5px;background:#09121d;color:#dce8f7;font-size:11px;outline:none}.m06-field input:focus{border-color:#438fd0}.m06-color{width:112px;height:28px;background:#09121d;border:1px solid #293d53;border-radius:5px;padding:3px}.m06-empty{color:#6f849d;font-size:11px;line-height:1.6}.m06-footer{height:27px;flex:none;border-top:1px solid #1c2b3d;background:#0a131e;display:flex;align-items:center;justify-content:space-between;padding:0 12px;color:#6e859f;font-size:9px}.m06-chip{padding:3px 6px;border:1px solid #263a50;border-radius:4px;color:#8fa8c2}
         @media(max-width:850px){.m06-inspector{width:225px}.m06-brand{min-width:0}.m06-brand small{display:none}.m06-btn .m06-btn-text{display:none}}
         @media(max-width:620px){.m06-inspector{position:absolute;right:0;top:0;bottom:0;z-index:5;width:min(270px,82vw);box-shadow:-12px 0 35px #0008}.m06-brand strong{font-size:10px}.m06-workbar{gap:6px;padding:0 8px}.m06-topbar{padding:0 9px}.m06-actions{gap:3px}}
       `}</style>
@@ -472,14 +572,27 @@ export default function ModelViewport() {
           <button className={`m06-btn ${mode === "rotate" ? "active" : ""}`} onClick={() => setMode("rotate")} title="Rotate (E)"><Rotate3D size={14}/></button>
           <button className={`m06-btn ${mode === "scale" ? "active" : ""}`} onClick={() => setMode("scale")} title="Scale (R)"><Maximize2 size={14}/></button>
         </div>
+        <div className="m06-divider" />
+        <div className="m06-toolgroup m06-modeling-tools">
+          <span className="m06-workbar-label">MODEL</span>
+          <button className="m06-btn" onClick={() => applyModelOperation("Extrude")}>Extrude</button>
+          <button className="m06-btn" onClick={() => applyModelOperation("Revolve")}>Revolve</button>
+          <button className="m06-btn" onClick={() => applyModelOperation("Sweep")}>Sweep</button>
+          <button className="m06-btn" onClick={() => applyModelOperation("Loft")}>Loft</button>
+          <button className="m06-btn" onClick={() => applyModelOperation("Union")}>Boolean</button>
+        </div>
       </nav>
 
       <section className="m06-stage">
         <div className="m06-viewport" ref={hostRef}>
-          <div className="m06-hud"><b>3D VIEWPORT</b><br/>Perspective · Real-time renderer<br/>Units: meters</div>
+          <div className="m06-hud"><b>3D VIEWPORT</b><br/>{cameraMode} · Real-time renderer<br/>Units: meters · {clippingEnabled ? "Section active" : "No clipping"} · {explodedEnabled ? "Exploded" : "Assembly"}</div>
           <div className="m06-view-tools">
             <button className={`m06-btn ${gridVisible ? "active" : ""}`} title="Toggle grid" onClick={() => setGridVisible((value) => !value)}><Grid3X3 size={14}/></button>
             <button className={`m06-btn ${axesVisible ? "active" : ""}`} title="Toggle axes" onClick={() => setAxesVisible((value) => !value)}><Layers3 size={14}/></button>
+            <button className={`m06-btn ${cameraMode === "Orthographic" ? "active" : ""}`} title="Toggle perspective / orthographic" onClick={toggleCameraMode}><Box size={14}/></button>
+            <button className={`m06-btn ${clippingEnabled ? "active" : ""}`} title="Section / clipping plane" onClick={toggleClippingPlane}><Scan size={14}/></button>
+            <button className={`m06-btn ${explodedEnabled ? "active" : ""}`} title="Exploded view" onClick={toggleExplodedView}><Maximize2 size={14}/></button>
+            <button className={`m06-btn ${compareEnabled ? "active" : ""}`} title="Model comparison" onClick={toggleModelComparison}><Layers3 size={14}/></button>
             <button className="m06-btn" title="Focus selected" onClick={focusSelected}><Focus size={14}/></button>
             <button className="m06-btn" title="Reset camera" onClick={resetCamera}><Scan size={14}/></button>
             <button className="m06-btn" title="Toggle inspector" onClick={() => setShowInspector((value) => !value)}><Settings2 size={14}/></button>

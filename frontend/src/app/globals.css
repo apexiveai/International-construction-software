@@ -47,6 +47,83 @@ button {
   gap: 20px;
 }
 
+.suite-switcher {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.suite-switcher-button {
+  height: 38px;
+  min-width: 175px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #111722;
+  color: #aebbd0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+.suite-switcher-button svg:last-child {
+  margin-left: auto;
+  transition: transform 0.18s ease;
+}
+
+.suite-switcher-button.open {
+  border-color: #3976b8;
+  color: #dfeaff;
+  background: #142238;
+}
+
+.suite-switcher-button.open svg:last-child {
+  transform: rotate(180deg);
+}
+
+.suite-menu {
+  position: absolute;
+  z-index: 100;
+  top: 44px;
+  left: 0;
+  width: 230px;
+  max-height: min(560px, calc(100vh - 84px));
+  overflow-y: auto;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #101722;
+  box-shadow: 0 16px 40px #05070ba8;
+}
+
+.suite-menu-item {
+  width: 100%;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #9aa9bf;
+  text-align: left;
+  font-size: 11px;
+}
+
+.suite-menu-item:hover {
+  background: #192438;
+  color: white;
+}
+
+.suite-menu-item.selected {
+  border-color: #244d76;
+  background: #142941;
+  color: #78baff;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -95,6 +172,51 @@ button {
   gap: 10px;
   color: var(--muted);
   font-size: 12px;
+  border: 0;
+  background: transparent;
+}
+
+.workspace-switcher {
+  position: relative;
+}
+
+.project-context.open {
+  color: #dfeaff;
+}
+
+.workspace-menu {
+  position: absolute;
+  z-index: 100;
+  top: 44px;
+  left: 0;
+  width: 210px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #101722;
+  box-shadow: 0 16px 40px #05070ba8;
+}
+
+.workspace-menu-item {
+  width: 100%;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #9aa9bf;
+  padding: 0 10px;
+  text-align: left;
+  font-size: 11px;
+}
+
+.workspace-menu-item.selected,
+.workspace-menu-item:hover {
+  border-color: #244d76;
+  background: #142941;
+  color: #78baff;
 }
 
 .project-context strong {
@@ -211,8 +333,7 @@ button {
 }
 
 .workspace {
-  margin-left: 225px;
-  padding: 25px 28px 0;
+  padding: 18px 28px 0;
   min-height: calc(100vh - 68px);
   display: flex;
   flex-direction: column;
@@ -336,12 +457,51 @@ button {
 }
 
 .editor-toolbar {
-  height: 43px;
+  height: 48px;
   padding: 0 14px;
   border-bottom: 1px solid var(--border);
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  background: #111722;
+}
+
+.context-ribbon-tabs {
+  align-self: stretch;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  margin-right: auto;
+}
+
+.context-ribbon-tab {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: #8797ae;
+  padding: 0 12px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.context-ribbon-tab:hover {
+  color: #dce7f7;
+  background: #151f2d;
+}
+
+.context-ribbon-tab.active {
+  color: #73b8ff;
+  background: #152235;
+}
+
+.context-ribbon-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  background: #4999f5;
 }
 
 .toolbar-section {
@@ -581,29 +741,39 @@ button {
 }
 
 @media (max-width: 1000px) {
-  .module-nav {
-    width: 65px;
-    padding: 20px 8px;
-  }
-
-  .nav-label,
-  .module-item span {
-    display: none;
-  }
-
-  .module-item {
-    justify-content: center;
-    padding: 0;
-  }
-
   .workspace {
-    margin-left: 65px;
+    margin-left: 0;
   }
 }
 
 @media (max-width: 700px) {
   .workspace {
     padding: 16px 10px 0;
+  }
+
+  .context-ribbon-tabs {
+    overflow-x: auto;
+  }
+
+  .context-ribbon-tab {
+    padding: 0 8px;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand-name {
+    display: none;
+  }
+
+  .suite-switcher-button {
+    min-width: 44px;
+  }
+
+  .suite-switcher-button span,
+  .suite-switcher-button svg:last-child {
+    display: none;
   }
 
   .project-context,
@@ -711,7 +881,7 @@ button {
 
 .cad-body {
   display: grid;
-  grid-template-columns: 145px minmax(0, 1fr) 245px;
+  grid-template-columns: 52px minmax(0, 1fr) 245px;
   min-height: 530px;
   flex: 1;
 }
@@ -719,24 +889,21 @@ button {
 .cad-tools {
   background: #111a27;
   border-right: 1px solid #273348;
-  padding: 16px 9px;
+  padding: 10px 5px;
 }
 
 .cad-panel-label {
-  color: #6e8099;
-  font-size: 8px;
-  letter-spacing: 1.3px;
-  font-weight: 700;
-  padding: 0 8px 13px;
+  display: none;
 }
 
 .cad-tool {
   width: 100%;
-  min-height: 38px;
+  min-height: 40px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 9px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
   margin-bottom: 4px;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -758,9 +925,11 @@ button {
 }
 
 .cad-tool small {
-  margin-left: auto;
-  color: #637792;
-  font-size: 8px;
+  display: none;
+}
+
+.cad-tool span {
+  display: none;
 }
 
 .cad-tool.danger:hover {
@@ -1105,7 +1274,7 @@ button {
 
 @media (max-width: 1050px) {
   .cad-body {
-    grid-template-columns: 120px minmax(0, 1fr) 205px;
+    grid-template-columns: 52px minmax(0, 1fr) 205px;
   }
 }
 

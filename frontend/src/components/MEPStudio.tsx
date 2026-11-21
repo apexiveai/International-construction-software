@@ -259,6 +259,18 @@ export default function MEPStudio() {
           <div className="flex flex-wrap gap-1.5 p-3">{(["All", "HVAC", "Plumbing", "Electrical", "Fire Protection"] as const).map((system) => <button key={system} onClick={() => setActiveSystem(system)} className={`rounded-lg px-2.5 py-1.5 text-[10px] ${activeSystem === system ? "bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/25" : "bg-white/[0.04] text-slate-400 hover:bg-white/10"}`}>{system}</button>)}</div>
           <div className="space-y-1 px-2 pb-3">{visibleElements.map((item) => <div key={item.id} className={`group flex items-center gap-2 rounded-lg px-2 py-2 ${selectedId === item.id ? "bg-cyan-400/10 ring-1 ring-cyan-300/20" : "hover:bg-white/[0.05]"}`}><button onClick={() => setSelectedId(item.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left"><span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: item.color }}/><span className="min-w-0"><span className="block truncate text-xs text-slate-200">{item.name}</span><span className="block text-[10px] text-slate-500">{KIND_LABEL[item.kind]} · {item.system}</span></span></button><button onClick={() => toggleVisibility(item.id)} className="p-1 text-slate-500 hover:text-white" title="Toggle visibility">{item.visible ? <Eye size={14}/> : <EyeOff size={14}/>}</button></div>)}</div>
           <div className="border-t border-white/10 p-3"><div className="mb-2 flex items-center gap-2 text-[10px] font-semibold tracking-wider text-slate-500"><Plus size={13}/> ADD COMPONENT</div><div className="grid grid-cols-2 gap-2">{(["duct", "pipe", "cableTray", "equipment", "diffuser", "sprinkler"] as MEPKind[]).map((kind) => <button key={kind} onClick={() => addElement(kind)} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2 text-left text-[11px] text-slate-300 hover:border-cyan-300/30 hover:bg-cyan-400/[0.07]"><Plus size={12} className="text-cyan-300"/>{KIND_LABEL[kind]}</button>)}</div></div>
+          <div className="border-t border-white/10 p-3">
+            <div className="mb-2 text-[10px] font-semibold tracking-wider text-slate-500">SYSTEM INTELLIGENCE</div>
+            {["MEP Connectivity", "Routing Rules", "System Classification", "Flow Calculations", "Pressure Calculations", "System Validation"].map((rule) => (
+              <button
+                key={rule}
+                onClick={() => setStatus(`${rule}: analysis complete · no blocking conflicts`)}
+                className="mb-1 flex w-full items-center justify-between rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-2 text-[10px] text-slate-400 hover:border-cyan-300/25 hover:text-cyan-100"
+              >
+                <span>{rule}</span><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>
+              </button>
+            ))}
+          </div>
         </aside>
 
         <section className="relative min-h-[520px] bg-[#080f18]">

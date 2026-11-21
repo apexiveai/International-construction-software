@@ -13,7 +13,24 @@ type Point = { x: number; y: number };
 
 type Shape = {
   id: string;
-  type: "line" | "rect" | "circle" | "polyline" | "arc";
+  type:
+    | "line"
+    | "rect"
+    | "circle"
+    | "polyline"
+    | "arc"
+    | "ellipse"
+    | "polygon"
+    | "spline"
+    | "hatch"
+    | "boundary"
+    | "point"
+    | "construction-line"
+    | "ray"
+    | "region"
+    | "text"
+    | "leader"
+    | "dimension";
   points: Point[];
   layer: string;
   color: string;
@@ -27,8 +44,21 @@ type Tool =
   | "circle"
   | "polyline"
   | "arc"
+  | "ellipse"
+  | "polygon"
+  | "spline"
+  | "hatch"
+  | "boundary"
+  | "point"
+  | "construction-line"
+  | "ray"
+  | "region"
+  | "text"
+  | "leader"
+  | "dimension"
+  | "measure"
   | "pan"
-  | "measure";
+  ;
 
 const initialLayers = [
   { name: "0", color: "#dce6f5", visible: true },
@@ -50,6 +80,18 @@ const tools: {
   { id: "circle", label: "Circle", icon: Circle, shortcut: "C" },
   { id: "polyline", label: "Polyline", icon: Pencil, shortcut: "P" },
   { id: "arc", label: "Arc", icon: Ruler, shortcut: "A" },
+  { id: "ellipse", label: "Ellipse", icon: Circle, shortcut: "E" },
+  { id: "polygon", label: "Polygon", icon: Square, shortcut: "G" },
+  { id: "spline", label: "Spline", icon: Pencil, shortcut: "S" },
+  { id: "hatch", label: "Hatch", icon: Grid3X3, shortcut: "HATCH" },
+  { id: "boundary", label: "Boundary", icon: Square, shortcut: "BO" },
+  { id: "point", label: "Point", icon: Crosshair, shortcut: "PO" },
+  { id: "construction-line", label: "Construction Line", icon: Minus, shortcut: "XL" },
+  { id: "ray", label: "Ray", icon: Slash, shortcut: "RY" },
+  { id: "region", label: "Region", icon: Layers3, shortcut: "REG" },
+  { id: "text", label: "Text / MText", icon: Ruler, shortcut: "T" },
+  { id: "leader", label: "Leader", icon: CornerDownRight, shortcut: "LE" },
+  { id: "dimension", label: "Dimension", icon: Ruler, shortcut: "DIM" },
   { id: "pan", label: "Pan", icon: Hand, shortcut: "H" },
   { id: "measure", label: "Measure", icon: Ruler, shortcut: "M" },
 ];
@@ -182,6 +224,10 @@ export default function CadEditor() {
   const [cornerDistance, setCornerDistance] = useState(50);
   const [geometryCommand, setGeometryCommand] = useState<GeometryCommand>(null);
   const commandFirstIdRef = useRef<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<"properties" | "blocks" | "management">("properties");
+  const [selectionFilter, setSelectionFilter] = useState("All objects");
+  const [ucs, setUcs] = useState<"WCS" | "UCS">("WCS");
+  const [commandText, setCommandText] = useState("");
 
   const [properties, setProperties] = useState({
     color: "#dce6f5",
@@ -401,9 +447,77 @@ export default function CadEditor() {
       ctx.arc(a.x, a.y, distance(a, b), 0, Math.PI * 2);
     }
 
-    if (shape.type === "polyline") {
+    if (shape.type === "ellipse" && b) {
+      ctx.ellipse(
+        a.x,
+        a.y,
+        Math.max(1, Math.abs(b.x - a.x)),
+        Math.max(1, Math.abs(b.y - a.y)),
+        0,
+        0,
+        Math.PI * 2
+      );
+    }
+
+    if (shape.type === "polygon" && b) {
+      const radius = distance(a, b);
+      const sides = 6;
+      ctx.moveTo(a.x + radius, a.y);
+      for (let i = 1; i <= sides; i++) {
+        const angle = (i * Math.PI * 2) / sides;
+        ctx.lineTo(a.x + Math.cos(angle) * radius, a.y + Math.sin(angle) * radius);
+      }
+      ctx.closePath();
+    }
+
+    if (shape.type === "point") {
+      ctx.moveTo(a.x - 5, a.y);
+      ctx.lineTo(a.x + 5, a.y);
+      ctx.moveTo(a.x, a.y - 5);
+      ctx.lineTo(a.x, a.y + 5);
+    }
+
+    if (
+      (shape.type === "construction-line" || shape.type === "ray") &&
+      b
+    ) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const length = Math.hypot(dx, dy) || 1;
+      if (shape.type === "ray") {
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(a.x + dx * 100, a.y + dy * 100);
+      } else {
+        ctx.moveTo(a.x - dx * 100, a.y - dy * 100);
+        ctx.lineTo(a.x + dx * 100, a.y + dy * 100);
+      }
+    }
+
+    if (
+      (shape.type === "text" || shape.type === "leader" || shape.type === "dimension") &&
+      b
+    ) {
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      if (shape.type === "text") {
+        ctx.fillStyle = color;
+        ctx.font = "12px ui-monospace, monospace";
+        ctx.fillText("TEXT", a.x + 8, a.y - 8);
+      }
+    }
+
+    if (
+      shape.type === "polyline" ||
+      shape.type === "spline" ||
+      shape.type === "hatch" ||
+      shape.type === "boundary" ||
+      shape.type === "region"
+    ) {
       ctx.moveTo(a.x, a.y);
       shape.points.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
+      if (shape.type === "hatch" || shape.type === "boundary" || shape.type === "region") {
+        ctx.closePath();
+      }
     }
 
     if (shape.type === "arc" && b) {
@@ -481,7 +595,15 @@ export default function CadEditor() {
         type === "line" ||
         type === "rect" ||
         type === "circle" ||
-        type === "arc"
+        type === "arc" ||
+        type === "ellipse" ||
+        type === "polygon" ||
+        type === "point" ||
+        type === "construction-line" ||
+        type === "ray" ||
+        type === "text" ||
+        type === "leader" ||
+        type === "dimension"
       ) {
         drawShape(ctx, {
           id: "preview",
@@ -726,7 +848,13 @@ export default function CadEditor() {
       return;
     }
 
-    if (toolRef.current === "polyline") {
+    if (
+      toolRef.current === "polyline" ||
+      toolRef.current === "spline" ||
+      toolRef.current === "hatch" ||
+      toolRef.current === "boundary" ||
+      toolRef.current === "region"
+    ) {
       polylineRef.current = [...polylineRef.current, point];
       currentRef.current = point;
       drawingRef.current = true;
@@ -764,6 +892,8 @@ export default function CadEditor() {
     let point = snapPoint(
       screenToWorld(event.clientX, event.clientY)
     );
+
+    setCoordinate(point);
 
     if (
       drawingRef.current &&
@@ -815,12 +945,18 @@ export default function CadEditor() {
   };
 
   const handleDoubleClick = () => {
-    if (toolRef.current !== "polyline") return;
+    if (
+      toolRef.current !== "polyline" &&
+      toolRef.current !== "spline" &&
+      toolRef.current !== "hatch" &&
+      toolRef.current !== "boundary" &&
+      toolRef.current !== "region"
+    ) return;
     if (polylineRef.current.length < 2) return;
 
     addShape({
       id: crypto.randomUUID(),
-      type: "polyline",
+      type: toolRef.current as Shape["type"],
       points: [...polylineRef.current],
       layer: activeLayerRef.current,
       color: activeLayerData.color,
@@ -993,6 +1129,51 @@ export default function CadEditor() {
     setStatus("MIRROR created across vertical center axis");
   };
 
+  const copySelected = () => {
+    const selected = shapesRef.current.find((shape) => shape.id === selectedRef.current);
+    if (!selected) {
+      setStatus("Select an object before using COPY");
+      return;
+    }
+    addShape({
+      ...selected,
+      id: crypto.randomUUID(),
+      points: selected.points.map((point) => ({ x: point.x + 100, y: point.y + 100 })),
+    });
+    setStatus("COPY created with 100 mm offset");
+  };
+
+  const rotateSelected = () => {
+    const selected = shapesRef.current.find((shape) => shape.id === selectedRef.current);
+    if (!selected) return;
+    const center = getShapeBoundsCenter(selected);
+    const angle = Math.PI / 6;
+    selected.points = selected.points.map((point) => {
+      const dx = point.x - center.x;
+      const dy = point.y - center.y;
+      return {
+        x: center.x + dx * Math.cos(angle) - dy * Math.sin(angle),
+        y: center.y + dx * Math.sin(angle) + dy * Math.cos(angle),
+      };
+    });
+    commitHistory();
+    redraw();
+    setStatus("ROTATE applied: 30 degrees");
+  };
+
+  const scaleSelected = () => {
+    const selected = shapesRef.current.find((shape) => shape.id === selectedRef.current);
+    if (!selected) return;
+    const center = getShapeBoundsCenter(selected);
+    selected.points = selected.points.map((point) => ({
+      x: center.x + (point.x - center.x) * 1.25,
+      y: center.y + (point.y - center.y) * 1.25,
+    }));
+    commitHistory();
+    redraw();
+    setStatus("SCALE applied: 125%");
+  };
+
   const startGeometryCommand = (command: Exclude<GeometryCommand, null>) => {
     commandFirstIdRef.current = null;
     setGeometryCommand(command);
@@ -1082,6 +1263,50 @@ export default function CadEditor() {
     setStatus("Drawing saved locally");
   };
 
+  const executeCommand = (raw: string) => {
+    const command = raw.trim().toLowerCase();
+    if (!command) return;
+
+    const commandTools: Record<string, Tool> = {
+      l: "line",
+      line: "line",
+      r: "rect",
+      rect: "rect",
+      c: "circle",
+      circle: "circle",
+      p: "polyline",
+      pl: "polyline",
+      a: "arc",
+      arc: "arc",
+      e: "ellipse",
+      ellipse: "ellipse",
+      g: "polygon",
+      polygon: "polygon",
+      s: "spline",
+      spline: "spline",
+      po: "point",
+      point: "point",
+      xl: "construction-line",
+      ray: "ray",
+      t: "text",
+      text: "text",
+      m: "measure",
+      measure: "measure",
+    };
+
+    if (command === "undo") undo();
+    else if (command === "redo") redo();
+    else if (command === "erase" || command === "delete") deleteSelected();
+    else if (command === "save") saveDrawing();
+    else if (command === "export") exportDrawing();
+    else if (command === "trim") startGeometryCommand("trim");
+    else if (command === "extend") startGeometryCommand("extend");
+    else if (commandTools[command]) setToolMode(commandTools[command]);
+    else setStatus(`Unknown command: ${raw.trim().toUpperCase()}`);
+
+    setCommandText("");
+  };
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
@@ -1155,6 +1380,12 @@ export default function CadEditor() {
           <button className="cad-action" onClick={exportDrawing}>
             <Download size={15} /> Export
           </button>
+          <span className="cad-separator" />
+          <button className="cad-action" onClick={copySelected}>Copy</button>
+          <button className="cad-action" onClick={rotateSelected}>Rotate</button>
+          <button className="cad-action" onClick={scaleSelected}>Scale</button>
+          <button className="cad-action" onClick={mirrorSelected}>Mirror</button>
+          <button className="cad-action" onClick={offsetSelected}>Offset</button>
         </div>
 
         <div className="cad-tool-group">
@@ -1170,33 +1401,36 @@ export default function CadEditor() {
           >
             <Crosshair size={15} /> Snap
           </button>
+          <button
+            className={`cad-toggle ${osnapEnabled ? "on" : ""}`}
+            onClick={() => setOsnapEnabled(!osnapEnabled)}
+            title="Object Snap (F3)"
+          >
+            <Crosshair size={15} /> OSNAP
+          </button>
+          <button
+            className={`cad-toggle ${orthoEnabled ? "on" : ""}`}
+            onClick={() => setOrthoEnabled(!orthoEnabled)}
+            title="Orthographic Mode (F8)"
+          >
+            ORTHO
+          </button>
+          <button
+            className={`cad-toggle ${polarEnabled ? "on" : ""}`}
+            onClick={() => setPolarEnabled(!polarEnabled)}
+            title="Polar Tracking (F10)"
+          >
+            POLAR
+          </button>
+          <button
+            className="cad-toggle"
+            onClick={() => setUcs((value) => value === "WCS" ? "UCS" : "WCS")}
+            title="Toggle World / User Coordinate System"
+          >
+            {ucs}
+          </button>
         </div>
       </div>
-
-      <button
-        className={`cad-toggle ${osnapEnabled ? "on" : ""}`}
-        onClick={() => setOsnapEnabled(!osnapEnabled)}
-        title="Object Snap (F3)"
-      >
-        <Crosshair size={15} />
-        OSNAP
-      </button>
-
-      <button
-        className={`cad-toggle ${orthoEnabled ? "on" : ""}`}
-        onClick={() => setOrthoEnabled(!orthoEnabled)}
-        title="Orthographic Mode (F8)"
-      >
-        ORTHO
-      </button>
-
-      <button
-        className={`cad-toggle ${polarEnabled ? "on" : ""}`}
-        onClick={() => setPolarEnabled(!polarEnabled)}
-        title="Polar Tracking (F10)"
-      >
-        POLAR
-      </button>
 
       <div className="cad-body">
         <aside className="cad-tools">
@@ -1257,7 +1491,15 @@ export default function CadEditor() {
 
           <div className="cad-command-line">
             <span className="command-prompt">COMMAND</span>
-            <span>{status}</span>
+            <input
+              value={commandText}
+              onChange={(event) => setCommandText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") executeCommand(commandText);
+              }}
+              placeholder={status}
+              aria-label="CAD command"
+            />
             <ChevronDown size={13} />
           </div>
 
@@ -1278,6 +1520,61 @@ export default function CadEditor() {
         </div>
 
         <aside className="cad-inspector">
+          <div className="cad-inspector-tabs" role="tablist">
+            <button
+              className={inspectorTab === "properties" ? "active" : ""}
+              onClick={() => setInspectorTab("properties")}
+            >
+              Properties
+            </button>
+            <button
+              className={inspectorTab === "blocks" ? "active" : ""}
+              onClick={() => setInspectorTab("blocks")}
+            >
+              Blocks
+            </button>
+            <button
+              className={inspectorTab === "management" ? "active" : ""}
+              onClick={() => setInspectorTab("management")}
+            >
+              Manage
+            </button>
+          </div>
+
+          {inspectorTab === "management" ? (
+            <div className="cad-inspector-section cad-management">
+              <div className="cad-inspector-heading">
+                <div><small>DOCUMENT MANAGEMENT</small><h3>Drawing Resources</h3></div>
+              </div>
+              {[
+                ["Linetype Manager", "Continuous, Dashed, Center"],
+                ["Lineweight Manager", "0.25 — 2.00 mm"],
+                ["Text Styles", "Standard / Annotative"],
+                ["Dimension Styles", "ISO-25 / Metric"],
+                ["Layouts", "Model, Layout 1"],
+                ["Sheet Manager", "A1, A3, Custom"],
+                ["Drawing Templates", "ISO A3, ISO A1"],
+                ["External References", "No XREF loaded"],
+              ].map(([title, detail]) => (
+                <button className="cad-management-row" key={title}>
+                  <span>{title}</span>
+                  <small>{detail}</small>
+                </button>
+              ))}
+            </div>
+          ) : inspectorTab === "blocks" ? (
+            <div className="cad-inspector-section">
+              <div className="cad-inspector-heading">
+                <div><small>BLOCK LIBRARY</small><h3>Blocks & References</h3></div>
+                <button className="cad-icon-button" title="Create block"><Plus size={16} /></button>
+              </div>
+              <button className="cad-block-card"><strong>DOOR-900</strong><small>Architectural / Door</small></button>
+              <button className="cad-block-card"><strong>WINDOW-1200</strong><small>Architectural / Window</small></button>
+              <button className="cad-block-card"><strong>COL-300</strong><small>Structural / Column</small></button>
+              <button className="cad-block-card"><strong>XREF-DWG</strong><small>External reference</small></button>
+            </div>
+          ) : (
+            <>
           <div className="cad-inspector-section">
             <div className="cad-inspector-heading">
               <div>
@@ -1438,7 +1735,11 @@ export default function CadEditor() {
             <div><span>Units</span><strong>Millimeters</strong></div>
             <div><span>Grid spacing</span><strong>10 mm</strong></div>
             <div><span>Active layer</span><strong>{activeLayer}</strong></div>
+            <div><span>Coordinate system</span><strong>{ucs}</strong></div>
+            <div><span>Selection filter</span><strong>{selectionFilter}</strong></div>
           </div>
+            </>
+          )}
         </aside>
       </div>
     </div>

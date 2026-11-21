@@ -14,6 +14,9 @@ import {
   Save,
   ShieldCheck,
   Workflow,
+  ClipboardList,
+  Component,
+  Database,
 } from "lucide-react";
 import {
   addAudit,
@@ -67,6 +70,9 @@ export default function BIMCoreStudio() {
   const [gridAxis, setGridAxis] = useState<"X" | "Z">("X");
   const [gridPosition, setGridPosition] = useState("0");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activeDataTab, setActiveDataTab] = useState<
+    "Overview" | "Authoring" | "Data" | "Management"
+  >("Overview");
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -310,7 +316,108 @@ export default function BIMCoreStudio() {
         </div>
       </header>
 
+      <nav className="border-b border-white/10 bg-[#0a121d] px-5 md:px-8">
+        <div className="mx-auto flex max-w-[1600px] gap-2 py-3">
+          {(["Overview", "Authoring", "Data", "Management"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveDataTab(tab)}
+              className={`rounded-lg px-3 py-2 text-xs ${
+                activeDataTab === tab
+                  ? "bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/25"
+                  : "text-slate-400 hover:bg-white/5"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       <div className="mx-auto max-w-[1600px] space-y-5 p-5 md:p-8">
+        {activeDataTab === "Authoring" && (
+          <section className="rounded-2xl border border-white/10 bg-[#101b29] p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <Component size={17} className="text-cyan-300" />
+              <h2 className="font-semibold">BIM Authoring Tools</h2>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+              {[
+                "Wall", "Floor", "Roof", "Ceiling", "Door", "Window",
+                "Stair", "Railing", "Column", "Beam", "Foundation",
+                "Room & Space", "Curtain Wall", "Component",
+                "Parametric Family", "Type & Instance Properties",
+              ].map((tool) => (
+                <button
+                  key={tool}
+                  type="button"
+                  onClick={() => setStatus(`${tool} authoring tool selected`)}
+                  className="rounded-lg border border-white/10 bg-[#0a121d] px-3 py-3 text-left text-xs text-slate-300 hover:border-cyan-300/30 hover:bg-cyan-400/[0.06]"
+                >
+                  {tool}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeDataTab === "Data" && (
+          <section className="rounded-2xl border border-white/10 bg-[#101b29] p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <Database size={17} className="text-cyan-300" />
+              <h2 className="font-semibold">BIM Data Structure</h2>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                "BIM Project", "BIM Model", "BIM Model Version", "Building",
+                "Building Storey", "Levels", "Grids", "Spaces", "Zones",
+                "Elements", "Element Types", "Families", "Family Types",
+                "Parameters", "Shared Parameters", "Materials", "Assemblies",
+                "Element Relationships", "Element Constraints",
+                "Element Classification",
+              ].map((item) => (
+                <div key={item} className="rounded-lg border border-white/[0.07] bg-[#0a121d] px-3 py-2.5">
+                  <p className="text-xs text-slate-200">{item}</p>
+                  <p className="mt-1 text-[10px] text-emerald-400">Available in shared data model</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeDataTab === "Management" && (
+          <section className="rounded-2xl border border-white/10 bg-[#101b29] p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <ClipboardList size={17} className="text-cyan-300" />
+              <h2 className="font-semibold">BIM Data Management</h2>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ["Element Properties", `${project.elements.length} records`],
+                ["Element Schedules", `${project.levels.length} levels`],
+                ["Quantity Takeoff", "Dimension-based quantities"],
+                ["Material Takeoff", "Material roll-up"],
+                ["Element Revision", "Revision snapshots"],
+                ["Model Versioning", "Named model versions"],
+                ["Model History", `${project.auditTrail.length} audit events`],
+                ["Change Tracking", "Source and shared changes"],
+                ["Model Validation", validation.valid ? "Schema valid" : "Errors found"],
+                ["Model Audit", "Audit trail ready"],
+              ].map(([title, detail]) => (
+                <button
+                  key={title}
+                  type="button"
+                  onClick={() => setStatus(`${title} opened`)}
+                  className="rounded-lg border border-white/[0.07] bg-[#0a121d] p-3 text-left"
+                >
+                  <p className="text-xs font-medium text-slate-200">{title}</p>
+                  <p className="mt-2 text-[10px] text-slate-500">{detail}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
         <section className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
           <div className="rounded-2xl border border-white/10 bg-[#101b29] p-5">
             <div className="mb-3 flex items-center gap-2 text-sm text-slate-400">
