@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import {
-  Download, Droplets, Eye, EyeOff, Flame, Grid3X3, Layers3, Plus, Redo2, Save, Settings2,
+  Download, Droplets, Eye, EyeOff, Flame, Grid3X3, Layers3, Plus, Redo2, Ruler, Save, Settings2,
   Trash2, Undo2, Upload, Wind, Wrench, Zap
 } from "lucide-react";
 
@@ -161,11 +161,19 @@ export default function MEPStudio() {
   }, []);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) { const parsed = JSON.parse(raw) as MEPDocument; if (parsed.format === "ApexiveAI-MEP" && Array.isArray(parsed.elements)) setElements(parsed.elements); }
-    } catch { setStatus("Saved MEP model could not be loaded"); }
-    finally { setStorageReady(true); }
+    queueMicrotask(() => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as MEPDocument;
+          if (parsed.format === "ApexiveAI-MEP" && Array.isArray(parsed.elements)) setElements(parsed.elements);
+        }
+      } catch {
+        setStatus("Saved MEP model could not be loaded");
+      } finally {
+        setStorageReady(true);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -226,11 +234,44 @@ export default function MEPStudio() {
     try {
       const parsed = JSON.parse(await file.text()) as MEPDocument;
       if (parsed.format !== "ApexiveAI-MEP" || !Array.isArray(parsed.elements)) throw new Error("Unsupported document format");
-      if (!parsed.elements.every((item) => item && typeof item.id === "string" && ["duct", "pipe", "cableTray", "equipment", "diffuser", "sprinkler"].includes(item.kind))) throw new Error("Invalid element data");
+      if (!parsed.elements.every((item) =>
+        item && typeof item.id === "string" &&
+        typeof item.name === "string" &&
+        ["duct", "pipe", "cableTray", "equipment", "diffuser", "sprinkler"].includes(item.kind) &&
+        ["HVAC", "Plumbing", "Electrical", "Fire Protection"].includes(item.system) &&
+        ["x", "y", "z", "length", "width", "height", "diameter", "rotation", "elevation"].every((key) => Number.isFinite(Number(item[key as keyof MEPElement])))
+      )) throw new Error("Invalid element data");
       commit(); setElements(parsed.elements); setSelectedId(parsed.elements[0]?.id ?? null); setStatus(`Imported ${parsed.elements.length} MEP elements`);
     } catch (error) { setStatus(error instanceof Error ? `Import failed: ${error.message}` : "Import failed"); }
     finally { if (fileRef.current) fileRef.current.value = ""; }
   };
+  const focusModel = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const objects = [...engine.objects.values()].filter((object) => object.visible);
+    if (!objects.length) { setStatus("No visible MEP elements to focus"); return; }
+    const bounds = new THREE.Box3();
+    objects.forEach((object) => bounds.expandByObject(object));
+    const center = bounds.getCenter(new THREE.Vector3());
+    const size = Math.max(bounds.getSize(new THREE.Vector3()).length(), 4);
+    engine.controls.target.copy(center);
+    engine.camera.position.copy(center).add(new THREE.Vector3(size * 0.9, size * 0.7, size));
+    engine.controls.update();
+    setStatus("MEP model focused");
+  };
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      if (event.ctrlKey && event.key.toLowerCase() === "z") { event.preventDefault(); undo(); }
+      else if (event.ctrlKey && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); }
+      else if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); removeSelected(); }
+      else if (event.key.toLowerCase() === "f") focusModel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   return (
     <main className="min-h-screen bg-[#070d15] text-slate-100">
@@ -239,7 +280,7 @@ export default function MEPStudio() {
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={undo} disabled={!history.length} className="rounded-lg border border-white/10 p-2 text-slate-300 hover:bg-white/10 disabled:opacity-30" title="Undo"><Undo2 size={16}/></button>
           <button onClick={redo} disabled={!future.length} className="rounded-lg border border-white/10 p-2 text-slate-300 hover:bg-white/10 disabled:opacity-30" title="Redo"><Redo2 size={16}/></button>
-          <button onClick={save} className="flex items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/20"><Save size={15}/> Save</button>
+          <button onClick={save} disabled={!storageReady} className="flex items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/20 disabled:opacity-30"><Save size={15}/> Save</button>
           <button onClick={exportModel} className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/10"><Download size={15}/> Export</button>
           <button onClick={() => fileRef.current?.click()} className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/10"><Upload size={15}/> Import</button>
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => void importModel(event.target.files?.[0])}/>
@@ -275,7 +316,7 @@ export default function MEPStudio() {
 
         <section className="relative min-h-[520px] bg-[#080f18]">
           <div className="pointer-events-none absolute left-4 top-4 z-10 rounded-lg border border-white/10 bg-[#0b1420]/85 px-3 py-2 text-[10px] text-slate-400 backdrop-blur"><div className="mb-1 font-semibold tracking-wider text-slate-200">3D COORDINATION VIEW</div><div>Orbit: drag · Zoom: scroll · Pan: right-drag</div></div>
-          <div className="absolute right-4 top-4 z-10 flex gap-2"><button onClick={() => setGridVisible((value) => !value)} className={`rounded-lg border p-2 ${gridVisible ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-200" : "border-white/10 bg-[#0b1420] text-slate-400"}`} title="Toggle grid"><Grid3X3 size={15}/></button><button onClick={() => setInspectorOpen((value) => !value)} className="rounded-lg border border-white/10 bg-[#0b1420] p-2 text-slate-300" title="Toggle properties"><Settings2 size={15}/></button></div>
+          <div className="absolute right-4 top-4 z-10 flex gap-2"><button onClick={() => setGridVisible((value) => !value)} className={`rounded-lg border p-2 ${gridVisible ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-200" : "border-white/10 bg-[#0b1420] text-slate-400"}`} title="Toggle grid"><Grid3X3 size={15}/></button><button onClick={focusModel} className="rounded-lg border border-white/10 bg-[#0b1420] p-2 text-slate-300 hover:text-cyan-200" title="Focus model (F)"><Ruler size={15}/></button><button onClick={() => setInspectorOpen((value) => !value)} className="rounded-lg border border-white/10 bg-[#0b1420] p-2 text-slate-300" title="Toggle properties"><Settings2 size={15}/></button></div>
           <div ref={hostRef} className="absolute inset-0" />
           <div className="pointer-events-none absolute bottom-4 left-4 rounded-lg border border-white/10 bg-[#0b1420]/85 px-3 py-2 text-[10px] text-slate-400"><span className="mr-3"><span className="mr-1 inline-block h-2 w-2 rounded-full bg-cyan-400"/> HVAC</span><span className="mr-3"><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-400"/> Plumbing</span><span className="mr-3"><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-400"/> Electrical</span><span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-rose-400"/> Fire</span></div>
         </section>

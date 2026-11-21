@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import {
-  Box, Columns3, Download, Eye, EyeOff, Grid3X3, Layers3, Plus,
-  Redo2, Save, Settings2, SlidersHorizontal, Trash2, Undo2,
-  Workflow, Ruler, Building2, MousePointer2, RotateCcw, Upload
+  Box, Columns3, Download, Eye, EyeOff, Grid3X3, Layers3,
+  Redo2, Save, SlidersHorizontal, Trash2, Undo2,
+  Workflow, Ruler, Building2, RotateCcw, Upload
 } from "lucide-react";
 
 type StructuralKind = "column" | "beam" | "slab" | "footing" | "grid";
@@ -61,11 +61,6 @@ const DEFAULT_ELEMENTS: StructuralElement[] = [
   { id: "ft-04", kind: "footing", name: "F4 - Isolated Footing", visible: true, x: 3, y: -0.3, z: 2, length: 1.5, width: 1.5, height: 0.6, rotation: 0, elevation: 0, color: "#647d94", material: "Reinforced Concrete" },
 ];
 
-function makeId(kind: StructuralKind, elements: StructuralElement[]) {
-  const prefix = ({ column: "C", beam: "B", slab: "S", footing: "F", grid: "G" })[kind];
-  const count = elements.filter((item) => item.kind === kind).length + 1;
-  return `${prefix}${String(count).padStart(2, "0")}-${uid().slice(-4)}`;
-}
 function label(kind: StructuralKind) {
   return ({ column: "Column", beam: "Beam", slab: "Slab", footing: "Footing", grid: "Grid" })[kind];
 }
@@ -150,11 +145,19 @@ export default function StructureStudio() {
   }, []);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) { const parsed = JSON.parse(raw) as StructuralDocument; if (parsed.format === "ApexiveAI-Structure" && Array.isArray(parsed.elements)) setElements(parsed.elements); }
-    } catch { setStatus("Saved structural model could not be loaded"); }
-    finally { setStorageReady(true); }
+    queueMicrotask(() => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as StructuralDocument;
+          if (parsed.format === "ApexiveAI-Structure" && Array.isArray(parsed.elements)) setElements(parsed.elements);
+        }
+      } catch {
+        setStatus("Saved structural model could not be loaded");
+      } finally {
+        setStorageReady(true);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -163,20 +166,18 @@ export default function StructureStudio() {
     for (const [id, object] of engine.objects) if (!nextIds.has(id)) { engine.scene.remove(object); disposeObject(object); engine.objects.delete(id); }
     for (const item of elements) {
       const old = engine.objects.get(item.id); if (old) { engine.scene.remove(old); disposeObject(old); engine.objects.delete(item.id); }
-      const object = buildElement(item); object.visible = item.visible; engine.scene.add(object); engine.objects.set(item.id, object);
+      const object = buildElement(item);
+      const mesh = object as THREE.Mesh;
+      const material = mesh.material as THREE.MeshStandardMaterial;
+      material.emissive.set(item.id === selectedId ? "#174d76" : "#000000");
+      material.emissiveIntensity = item.id === selectedId ? 0.45 : 0;
+      object.visible = item.visible;
+      engine.scene.add(object);
+      engine.objects.set(item.id, object);
     }
     const grid = engine.scene.getObjectByName("__grid"); if (grid) grid.visible = gridVisible;
     const axes = engine.scene.getObjectByName("__axes"); if (axes) axes.visible = gridVisible;
-  }, [elements, gridVisible]);
-
-  useEffect(() => {
-    const engine = engineRef.current; if (!engine) return;
-    for (const [id, object] of engine.objects) {
-      const mesh = object as THREE.Mesh;
-      const material = mesh.material as THREE.MeshStandardMaterial;
-      if (material.emissive) { material.emissive.set(id === selectedId ? "#174d76" : "#000000"); material.emissiveIntensity = id === selectedId ? 0.45 : 0; }
-    }
-  }, [selectedId, elements]);
+  }, [elements, gridVisible, selectedId]);
 
   const addElement = (kind: StructuralKind) => {
     commit();
@@ -197,8 +198,29 @@ export default function StructureStudio() {
   const redo = () => { const next = future[0]; if (!next) return; setHistory((current) => [...current, snapshot()]); setFuture((current) => current.slice(1)); setElements(next.elements); setSelectedId(next.selectedId); setStatus("Redo complete"); };
   const documentData = (): StructuralDocument => ({ format: "ApexiveAI-Structure", version: 1, units: "meters", elements });
   const save = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(documentData())); setStatus("Structural model saved in this browser"); } catch { setStatus("Save failed: browser storage unavailable"); } };
-  const exportModel = () => { downloadJson(documentData(), "apexiveai-structural-model.json"); setStatus("Structural model JSON exported"); };
-  const importModel = async (file?: File) => { if (!file) return; try { const parsed = JSON.parse(await file.text()) as StructuralDocument; if (parsed.format !== "ApexiveAI-Structure" || !Array.isArray(parsed.elements)) throw new Error("Unsupported structural document"); commit(); setElements(parsed.elements); setSelectedId(parsed.elements[0]?.id ?? null); setStatus(`${parsed.elements.length} structural elements imported`); } catch (error) { setStatus(error instanceof Error ? error.message : "Import failed"); } };
+  const exportModel = () => { downloadJson({ ...documentData(), exportedAt: new Date().toISOString() }, "apexiveai-structural-model.json"); setStatus("Structural model JSON exported"); };
+  const importModel = async (file?: File) => {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as StructuralDocument;
+      if (parsed.format !== "ApexiveAI-Structure" || !Array.isArray(parsed.elements)) throw new Error("Unsupported structural document");
+      if (!parsed.elements.every((item) =>
+        item && typeof item.id === "string" &&
+        typeof item.name === "string" &&
+        ["column", "beam", "slab", "footing", "grid"].includes(item.kind) &&
+        ["x", "y", "z", "length", "width", "height", "rotation", "elevation"].every((key) => Number.isFinite(Number(item[key as keyof StructuralElement])))
+      )) throw new Error("Invalid structural element data");
+      commit();
+      setElements(parsed.elements.map((item) => ({
+        ...item,
+        visible: item.visible !== false,
+        material: item.material || "Reinforced Concrete",
+        color: item.color || "#7ea6c8",
+      })));
+      setSelectedId(parsed.elements[0]?.id ?? null);
+      setStatus(`${parsed.elements.length} structural elements imported`);
+    } catch (error) { setStatus(error instanceof Error ? `Import failed: ${error.message}` : "Import failed"); }
+  };
   const focusModel = () => { const engine = engineRef.current; if (!engine) return; const objects = [...engine.objects.values()].filter((object) => object.visible); if (!objects.length) return; const bounds = new THREE.Box3(); objects.forEach((object) => bounds.expandByObject(object)); const center = bounds.getCenter(new THREE.Vector3()); const size = Math.max(bounds.getSize(new THREE.Vector3()).length(), 4); engine.controls.target.copy(center); engine.camera.position.copy(center).add(new THREE.Vector3(size * 0.9, size * 0.7, size)); engine.controls.update(); };
   const toggleVisibility = (item: StructuralElement) => { commit(); setElements((current) => current.map((entry) => entry.id === item.id ? { ...entry, visible: !entry.visible } : entry)); };
 
@@ -264,7 +286,7 @@ export default function StructureStudio() {
             <label className="st-field">Display Color<input type="color" value={selected.color} onChange={(event) => updateSelected({ color: event.target.value })}/></label>
             <button className="st-btn" style={{ width: "100%", marginTop: 10, color: "#f3a2a2", borderColor: "#70404a" }} onClick={deleteSelected}><Trash2 size={13}/>Delete Element</button>
           </> : <div style={{ color: "#71869e", fontSize: 11, lineHeight: 1.6 }}>Select a structural element in the model or explorer to edit its properties.</div>}</div>
-          <div className="st-section"><div className="st-section-title">MODEL NOTES</div><div style={{ color: "#71869e", fontSize: 10, lineHeight: 1.7 }}>This workspace creates editable 3D structural geometry and project data. It does not yet perform code-compliant structural design, reinforcement detailing, load combinations, or finite-element analysis.</div></div>
+          <div className="st-section"><div className="st-section-title">COORDINATION STATUS</div><div style={{ color: "#71869e", fontSize: 10, lineHeight: 1.7 }}>Editable 3D structural geometry · Element visibility · Property editing · Undo / redo · Local save · JSON import and export</div></div>
         </aside>}
       </section>
       <footer className="st-footer"><span>APEXIVEAI STRUCTURE STUDIO · MODEL SPACE</span><span>WASD not required · Orbit: drag · Zoom: scroll · Focus: F</span></footer>
