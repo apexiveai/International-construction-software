@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Ruler, Building2, Cuboid, Layers3, Box, Cpu,
   Settings2, Search, Cloud,
@@ -25,6 +25,7 @@ import ProcurementInventoryStudio from "@/components/ProcurementInventoryStudio"
 import SubcontractorContractStudio from "@/components/SubcontractorContractStudio";
 import EngineeringExtensionsStudio from "@/components/EngineeringExtensionsStudio";
 import DigitalTwinAIStudio from "@/components/DigitalTwinAIStudio";
+import DockableWorkspace from "@/components/DockableWorkspace";
 
 const modules = [
   { id: "cad", name: "CAD Drafting", icon: Ruler, engine: "APEXIVEAI 2D CAD ENGINE" },
@@ -77,6 +78,10 @@ export default function Home() {
   const [activeModule, setActiveModule] = useState<ModuleId>("cad");
   const [suiteMenuOpen, setSuiteMenuOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const moduleSelectorRef = useRef<((moduleId: ModuleId) => void) | null>(null);
+  const registerModuleSelector = useCallback((select: ((moduleId: ModuleId) => void) | null) => {
+    moduleSelectorRef.current = select;
+  }, []);
   const active = modules.find((module) => module.id === activeModule) ?? modules[0];
   const ActiveIcon = active.icon;
 
@@ -126,6 +131,7 @@ export default function Home() {
                     className={`suite-menu-item ${activeModule === module.id ? "selected" : ""}`}
                     onClick={() => {
                       setActiveModule(module.id);
+                      moduleSelectorRef.current?.(module.id);
                       setSuiteMenuOpen(false);
                     }}
                   >
@@ -217,7 +223,13 @@ export default function Home() {
             </button>
           </div>
 
-          <ActiveModuleView moduleId={activeModule} />
+          <DockableWorkspace
+            modules={modules}
+            selectedModule={activeModule}
+            onSelectedModuleChange={setActiveModule}
+            onRegisterModuleSelector={registerModuleSelector}
+            renderModule={(moduleId) => <ActiveModuleView moduleId={moduleId} />}
+          />
         </div>
 
         <footer className="application-footer">
